@@ -193,7 +193,7 @@ class ProductionLine:
 from openai import OpenAI
 
 # Initialize OpenAI client
-client = OpenAI(api_key="")
+client = OpenAI(api_key="API here")
 
 
 
