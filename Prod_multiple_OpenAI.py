@@ -503,39 +503,83 @@ class Multiproduct:
         return np.array(actions)
 
     def step(self, actions):
-        # part, machine = action
-        # print("action in the step: ", actions)
-        [self.run_machine(k) for k in range(n)]
-        actionList= self.get_alist()
-        # action_pairs = [actionList[i] for i in actions]
-        # print("action final in the step: ", action_pairs)
-        for action in actions: # the action coming is like this [[(0,1), (1,2)]], that's why taking inner list only
-            if any(np.array_equal(sublist, [0, 0, 0]) for sublist in mp):
-                part, machine = action
-                # print("part and machine in step: ", part, machine)
-                if np.all(self.mp[machine]== [0,0,0]):
-                    self.get_W()
-                    # print('self.W[machine]=', self.W[machine])
-                    if self.W[machine]==0:
-                        self.run_gantry(action)
-                        self.run_machine(machine)
-                        # self.run_buffer(action)
-                    else:
-                        self.downtime[machine]+=1
-                        self.total_downtime[machine]+=1
-                else:
-                    if self.mprogress[machine] == 0 and self.Tr[machine] == 0 and self.processing[machine] == False and self.n_wait[machine] == 1 and self.mready[machine] == False:
-                        self.run_gantry(action)
-                        self.run_machine(machine)
-            else:
-                if np.any(self.mprogress == 0) and np.any(self.Tr == 0) and np.any(self.processing == False) and \
-                        np.any(self.n_wait == 1) and np.any(self.mready == False):
+        # Check if actions are in the correct format
+        try:
+            # Ensure actions is a list of exactly two tuples
+            if not (isinstance(actions, list) and len(actions) == 2 and
+                    all(isinstance(action, tuple) and len(action) == 2 for action in actions)):
+                raise ValueError("Actions must be a list of two tuples.")
+
+            # Proceed with the normal operation
+            [self.run_machine(k) for k in range(n)]
+            actionList = self.get_alist()
+
+            for action in actions:  # actions should be like [(0, 1), (1, 2)]
+                if any(np.array_equal(sublist, [0, 0, 0]) for sublist in mp):
                     part, machine = action
-                    self.run_gantry(action)
-                    self.run_machine(machine)
-                    # self.get_reward()
-        # print("self.b: ", self.b)
-        return self.get_state(), self.get_reward(), self.get_done(), self.get_info()
+                    if np.all(self.mp[machine] == [0, 0, 0]):
+                        self.get_W()
+                        if self.W[machine] == 0:
+                            self.run_gantry(action)
+                            self.run_machine(machine)
+                        else:
+                            self.downtime[machine] += 1
+                            self.total_downtime[machine] += 1
+                    else:
+                        if (self.mprogress[machine] == 0 and self.Tr[machine] == 0 and
+                                not self.processing[machine] and self.n_wait[machine] == 1 and
+                                not self.mready[machine]):
+                            self.run_gantry(action)
+                            self.run_machine(machine)
+                else:
+                    if (np.any(self.mprogress == 0) and np.any(self.Tr == 0) and
+                            np.any(self.processing == False) and np.any(self.n_wait == 1) and
+                            np.any(self.mready == False)):
+                        part, machine = action
+                        self.run_gantry(action)
+                        self.run_machine(machine)
+
+            return self.get_state(), self.get_reward(), self.get_done(), self.get_info()
+
+        except ValueError as e:
+            print(f"Error: {e}")
+            # Optionally return a default value or raise an error
+            return None, None, None, None  # Or handle accordingly
+
+    # def step(self, actions):
+    #     # part, machine = action
+    #     # print("action in the step: ", actions)
+    #     [self.run_machine(k) for k in range(n)]
+    #     actionList= self.get_alist()
+    #     # action_pairs = [actionList[i] for i in actions]
+    #     # print("action final in the step: ", action_pairs)
+    #     for action in actions: # the action coming is like this [[(0,1), (1,2)]], that's why taking inner list only
+    #         if any(np.array_equal(sublist, [0, 0, 0]) for sublist in mp):
+    #             part, machine = action
+    #             # print("part and machine in step: ", part, machine)
+    #             if np.all(self.mp[machine]== [0,0,0]):
+    #                 self.get_W()
+    #                 # print('self.W[machine]=', self.W[machine])
+    #                 if self.W[machine]==0:
+    #                     self.run_gantry(action)
+    #                     self.run_machine(machine)
+    #                     # self.run_buffer(action)
+    #                 else:
+    #                     self.downtime[machine]+=1
+    #                     self.total_downtime[machine]+=1
+    #             else:
+    #                 if self.mprogress[machine] == 0 and self.Tr[machine] == 0 and self.processing[machine] == False and self.n_wait[machine] == 1 and self.mready[machine] == False:
+    #                     self.run_gantry(action)
+    #                     self.run_machine(machine)
+    #         else:
+    #             if np.any(self.mprogress == 0) and np.any(self.Tr == 0) and np.any(self.processing == False) and \
+    #                     np.any(self.n_wait == 1) and np.any(self.mready == False):
+    #                 part, machine = action
+    #                 self.run_gantry(action)
+    #                 self.run_machine(machine)
+    #                 # self.get_reward()
+    #     # print("self.b: ", self.b)
+    #     return self.get_state(), self.get_reward(), self.get_done(), self.get_info()
 
 from openai import OpenAI
 import ast
@@ -549,52 +593,62 @@ def get_chatgpt_action(state):
     # Define the prompt based on the state #     The goal is to maximize production throughput, specifically focusing on the number of parts processed by the last machine (Machine 4). When selecting
     #     actions, prioritize loading downstream machines (machine 4 first, then machine 3, and so on).
 
-    prompt = f""" You must only provide the actions without any details for example '[(0,0), (0,1)]'.
+    prompt = f"""You must only provide the actions without any details for example '[(0,2), (0,3)]'.
     Consider a serial manufacturing system with four machines and three in-between buffers. Each machine has a dedicated processing time, 
     and the buffers have maximum capacities of 15 parts. There are two robots in the system to handle materials.
 
-    
-Given the following states:
+    Given the following states:
 
-Machine 1 running status: {state[0]}
-Machine 2 running status: {state[1]}
-Machine 3 running status: {state[2]}
-Machine 4 running status: {state[3]}
-Machine 1 mp-status: {state[4]}
-Machine 2 mp-status: {state[5]}
-Machine 3 mp-status: {state[6]}
-Machine 4 mp-status: {state[7]}
-Buffer 1 level: {state[8]}
-Buffer 2 level: {state[9]}
-Buffer 3 level: {state[10]}
-Machine 1 progress:{state[11]}
-Machine 2 progress:{state[12]}
-Machine 3 progress:{state[13]}
-Machine 4 progress: {state[14]}
-Machine 1 robot status:{state[15]}
-Machine 2 robot status:{state[16]}
-Machine 3 robot status:{state[17]}
-Machine 4 robot status: {state[18]}
+    Machine 1 running status: {state[0]}
+    Machine 2 running status: {state[1]}
+    Machine 3 running status: {state[2]}
+    Machine 4 running status: {state[3]}
+    Machine 1 mp-status: {state[4]}
+    Machine 2 mp-status: {state[5]}
+    Machine 3 mp-status: {state[6]}
+    Machine 4 mp-status: {state[7]}
+    Buffer 1 level: {state[12]}
+    Buffer 2 level: {state[13]}
+    Buffer 3 level: {state[14]}
+    Machine 1 progress: {state[8]}
+    Machine 2 progress: {state[9]}
+    Machine 3 progress: {state[10]}
+    Machine 4 progress: {state[11]}
+    Machine 1 robot status: {state[15]}
+    Machine 2 robot status: {state[16]}
+    Machine 3 robot status: {state[17]}
+    Machine 4 robot status: {state[18]}
 
-Evaluate the following actions:
+    Evaluate the following actions:
 
-Action 1 (0,0): Load machine 1
-Action 2 (0,1): Load machine 2
-Action 3 (0,2): Load machine 3
-Action 4 (0,3): Load machine 4
+    Action 1 (0,0): Load machine 1
+    Action 2 (0,1): Load machine 2
+    Action 3 (0,2): Load machine 3
+    Action 4 (0,3): Load machine 4
 
-The feasibility criteria for each action is as follows:
+    The feasibility criteria for each action are as follows:
 
-Action 1 is feasible only if Buffer 1 < 15, Machine 1 running, Machine 1 mp-status is free or processing with no progress, and Machine 1 robot status is free.
-Action 2 is feasible if Buffer 1 > 0, Buffer 2 < 15, Machine 2 running, Machine 2 mp-status is free or processing with no progress, and Machine 2 robot status is free.
-Action 3 is feasible if Buffer 2 > 0, Buffer 3 < 15, Machine 3 running, Machine 3 mp-status is free or processing with no progress, and Machine 3 robot status is free.
-Action 4 is feasible if Buffer 3 > 0, Machine 4 running, Machine 4 mp-status is free or processing with no progress, and Machine 4 robot status is free.
+    - Action 1 is feasible only if Buffer 1 < 15, Machine 1 is running, Machine 1 mp-status is free or processing with no progress, and Machine 1 robot status is free.
+    - Action 2 is feasible if Buffer 1 > 0, Buffer 2 < 15, Machine 2 is running, Machine 2 mp-status is free or processing with no progress, and Machine 2 robot status is free.
+    - Action 3 is feasible if Buffer 2 > 0, Buffer 3 < 15, Machine 3 is running, Machine 3 mp-status is free or processing with no progress, and Machine 3 robot status is free.
+    - Action 4 is feasible if Buffer 3 > 0, Machine 4 is running, Machine 4 mp-status is free or processing with no progress, and Machine 4 robot status is free.
 
-If multiple actions are feasible, Action 4 must be prioritized first then Action 3, then Action 2 and then Action 1.
-Based on these states, criteria and the goal of maximizing production throughput by prioritizing downstream machines, what actions should be assigned to the two robots? The output must be in the format '[(action1), (action2)]' without additional details.
- 
+    If only one action is feasible, it must be accompanied by Action 1. This means if, for example, only Action 3 is feasible, the output should look like this: [(0,2), (0,0)]
+
+    If multiple actions are feasible, the actions must be prioritized as follows:
+
+    Prioritization of Actions:
+    1. Action 4 (0,3) must be prioritized the most.
+    2. Action 3 (0,2) should be prioritized next.
+    3. Action 2 (0,1) should be prioritized less than Action 3.
+    4. Action 1 (0,0) must be prioritized the least.
+
+    If no actions are feasible, return '[(0,0), (0,0)]' to indicate both robots are idle.
+
+    Based on these states, criteria, and the goal of maximizing production throughput by prioritizing downstream machines, what actions should be assigned to the two robots? The output must be in the format '[(action1), (action2)]' without additional details.
     """
-#The output must only provide the actions with no details for example [(0,1), (1,3)].
+
+    #The output must only provide the actions with no details for example [(0,1), (1,3)].
     # Call OpenAI API with the new client
     response = client.chat.completions.create(
         messages=[
@@ -605,13 +659,19 @@ Based on these states, criteria and the goal of maximizing production throughput
         temperature=0.3
     )
     # print("response from gpt: ", response)
+    print("prompt: ", prompt)
     action_content = response.choices[0].message.content.strip()
-    # print('action:', action_content)  # Output: "[(0,0), (1,0)]"
+    print('action:', action_content)  # Output: "[(0,0), (1,0)]"
 
-    # If you need to convert it to a list of tuples
-
-    action_list = ast.literal_eval(action_content)
-    print('action list:', action_list)
+    try:
+        action_list = ast.literal_eval(action_content)
+        print('action list:', action_list)  # Print the resulting list of tuples
+    except SyntaxError as e:
+        print(f"SyntaxError: {e}. Action content was: '{action_content}'")
+        action_list = [(0, 0), (0, 0)]  # Fallback to default action
+    except Exception as e:
+        print(f"Error: {e}. Action content was: '{action_content}'")
+        action_list = [(0, 0), (0, 0)]  # Fallback to default action
     return action_list
 
 def evaluate_chatgpt_agent(env, steps_per_episode=100, runs_per_episode=1):
@@ -623,7 +683,7 @@ def evaluate_chatgpt_agent(env, steps_per_episode=100, runs_per_episode=1):
     # Run the single episode for 3 runs
     for run in range(runs_per_episode):
         state = env.reset()
-        print("state from reset: ", state)
+        # print("state from reset: ", state)
         run_reward = 0
 
         for step in range(steps_per_episode):
@@ -635,13 +695,14 @@ def evaluate_chatgpt_agent(env, steps_per_episode=100, runs_per_episode=1):
             #       f"Machine 1 progress:{state[11]} Machine 2 progress:{state[12]} Machine 3 progress:{state[13]} Machine 4 progress: {state[14]}"
             #       f"Machine 1 robot status: {state[15]} Machine 2 robot status: {state[16]} Machine 3 robot status: {state[17]} Machine 4 robot "
             #       f"status: {state[18]}")
+            print("State provided: ", state)
             action = get_chatgpt_action(state)
 
             # Take the step in the environment using the action
             next_state, reward, done, info = env.step(action)
             run_reward += reward
             state = next_state
-            print("state from step ftn: ", state)
+            # print("state from step ftn: ", state)
             # Update last_action with the current action
             # last_action = action
             print("run reward: ", run_reward)
@@ -671,7 +732,7 @@ if __name__ == "__main__":
     env = Multiproduct(ptypes, n, b, B, Tp, ng, MTTR, MTBF, T, Tl, Tu)
 
     # Evaluate the ChatGPT agent for one episode run 3 times
-    mean_reward, std_reward = evaluate_chatgpt_agent(env, steps_per_episode=100, runs_per_episode=1)
+    mean_reward, std_reward = evaluate_chatgpt_agent(env, steps_per_episode=50, runs_per_episode=1)
 
     # Plot the rewards
     plot_rewards(mean_reward, std_reward)
